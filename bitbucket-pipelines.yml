@@ -9,4 +9,4 @@ pipelines:
   default:
     - step:
         script:
-          - npm install -g purescript
+          - npm install -g purescript-psa
