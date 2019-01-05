@@ -213,6 +213,7 @@ renderView state = let
       [ renderButton "rotX++" (IncAngVelocity X)
       , renderButton "rotY++" (IncAngVelocity Y)
       , renderButton "rotZ++" (IncAngVelocity Z)
+      ,renderButton  "rot"
       ]
       <>
       [ SE.svg
