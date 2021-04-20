@@ -1,21 +1,26 @@
 module Main where
 
 import Prelude
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE)
-import Control.Monad.Eff.Timer as T
-import Halogen.Aff as HA
-import Halogen as H
-import Halogen.VDom.Driver (runUI)
+
+import Effect (Effect)
+import Effect.Timer as T
+import Effect.Class (liftEffect)
+
 import Cube as C
+import Halogen as H
+import Halogen.Aff as HA
+import Halogen.VDom.Driver (runUI)
 
 frameRate :: Int
-frameRate = 200 -- TODO: this is needed in Cube component. Send it as an input.
+frameRate = 200
 
-main :: Eff (HA.HalogenEffects (console :: CONSOLE, timer :: T.TIMER)) Unit
+
+main :: Effect Unit
 main = HA.runHalogenAff do
   body <- HA.awaitBody
   cube <- runUI C.cubes unit body
+  
+  liftEffect $ T.setInterval (1000 / frameRate) do
+    HA.runHalogenAff $ cube.query $ H.mkTell C.Tick
 
-  H.liftEff $ T.setInterval (1000 / frameRate) do
-    HA.runHalogenAff $ cube.query $ H.action C.Tick
+  

@@ -1,12 +1,16 @@
 # README #
 
 
-### SETUP ###
+### TOCOMPILE ###
 
-* bower i
-* npm i
-* npm run watch
+* spago i
+* spago build -w
 
-Open $project_dir/dist/index.html
+
+To see the code running
+* spago bundle-app --to dist/app.js
+Then open 
+$ project_dir/dist/index.html to see the cube
+
 
 Dev Workflow: Make changes to files in src and it will automatically compile. Reload index.html in the browser. 

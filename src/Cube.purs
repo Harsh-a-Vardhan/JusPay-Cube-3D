@@ -2,18 +2,19 @@ module Cube where
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Eff.Console (log, CONSOLE)
+import Data.Tuple
 import Data.Array (mapWithIndex, (!!))
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Tuple (Tuple(..))
+
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Elements as HEL
 import Halogen.HTML.Properties as HP
+
 import Math (cos, sin)
-import Svg.Attributes as SA
-import Svg.Elements as SE
+import Halogen.Svg.Attributes as SA
+import Halogen.Svg.Elements as SE
 
 -- Core Types
 type Distance = Number
@@ -119,57 +120,65 @@ initCube =
   , forward: true
   }
 
+data Query a = Tick a | Other a
+
 -- Events
-data Query a
-  = Tick a
-  | IncAngVelocity Axis a
+data Action
+  = DecAngVelocity Axis
+  | IncAngVelocity Axis
 
--------------------- UPDATE / REDUCERS --------------------
 
-cubes :: forall eff. H.Component HH.HTML Query Unit Unit (Aff (console :: CONSOLE | eff))
+cubes :: forall query input output m. H.Component Query input output m
 cubes =
-  H.component
-    { initialState: const initialState
-    , render
-    , eval
-    , receiver: const Nothing
-    }
-  where
-    initialState :: State
-    initialState = initCube
-
-    render :: State -> H.ComponentHTML Query
-    render = renderView
-
-    eval :: Query ~> H.ComponentDSL State Query Unit (Aff (console :: CONSOLE | eff))
-    eval = case _ of
-      Tick next -> do
-        cube <- H.get
-        let angVel = cube.angVel
-            {vertices, edges} = cube.shape
-            newShape =
-              { edges: edges
-              , vertices: rotateShape vertices (anglePerFrame angVel)
+    H.mkComponent
+        { initialState: const initialState
+        , render
+        , eval: H.mkEval $ H.defaultEval 
+              { 
+                handleAction = handleAction 
+              , handleQuery = handleQuery
               }
-            newCube = cube
-              { angVel = dampenAngVelocity angVel
-              , shape = newShape
-              }
-        H.put newCube
-        H.liftEff $ log "tick"
-        pure next
+        }
+    where
+        initialState :: State
+        initialState = initCube
 
-      IncAngVelocity axis next -> do
-        cube <- H.get
-        let {xa, ya, za} = cube.angVel
-        H.modify
-          (\c ->
-            case axis of
-              X -> c { angVel { xa = xa + accelerateBy } }
-              Y -> c { angVel { ya = ya + accelerateBy } }
-              Z -> c { angVel { za = za + accelerateBy } }
-          )
-        pure next
+        render :: forall m. State -> H.ComponentHTML Action () m
+        render = renderView
+
+        handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
+        handleAction query = case query of
+            DecAngVelocity axis -> H.modify_ \state -> state
+            IncAngVelocity axis -> do
+                    cube <- H.get
+                    let {xa, ya, za} = cube.angVel
+                    _ <- H.modify (\c ->
+                          case axis of
+                            X -> c { angVel { xa = xa + accelerateBy } }
+                            Y -> c { angVel { ya = ya + accelerateBy } }
+                            Z -> c { angVel { za = za + accelerateBy } }
+                        )
+                    pure unit
+
+        handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
+        handleQuery = case _ of
+          Tick a -> do
+            cube <- H.get
+            let angVel = cube.angVel
+                {vertices, edges} = cube.shape
+                newShape =
+                  { edges: edges
+                  , vertices: rotateShape vertices (anglePerFrame angVel)
+                  }
+                newCube = cube
+                  { angVel = dampenAngVelocity angVel
+                  , shape = newShape
+                  }
+            H.put newCube
+            pure (Just a)
+          Other a -> 
+            pure (Just a)
+
 
 rotateShape :: Array Point3D -> AngVelocity3D -> Array Point3D
 rotateShape vertices ang =
@@ -203,81 +212,85 @@ dampenAngVelocity {xa, ya, za} =
     dampen :: Number -> Number
     dampen ang = ang * dampenPercent -- Basics.max 0 (ang-drpf)
 
--------------------- VIEW --------------------
-renderView :: State -> H.ComponentHTML Query
+
+---------------------------------------------------------------------------------------
+
+renderView :: forall m. State -> H.ComponentHTML Action () m
 renderView state = let
-    {vertices, edges} = state.shape
-    vert2Ds = map project vertices
-  in
-    HH.div [] $
-      [ renderButton "rotX++" (IncAngVelocity X)
-      , renderButton "rotY++" (IncAngVelocity Y)
-      , renderButton "rotZ++" (IncAngVelocity Z)
-      ]
-      <>
-      [ SE.svg
-        [ SA.viewBox 0.0 0.0 viewBoxSize viewBoxSize ]
-        [ SE.g []
-          (drawCube edges vert2Ds)
+        {vertices, edges} = state.shape
+        vert2Ds = map project vertices
+    in
+        HH.div [] $
+        [ renderButton "rotX++" (IncAngVelocity X)
+        , renderButton "rotY++" (IncAngVelocity Y)
+        , renderButton "rotZ++" (IncAngVelocity Z)
         ]
-      ]
-  where
-    renderButton label query =
-      HH.button
-        [ HP.title label
-        , HE.onClick (HE.input_ query)
+        <>
+        [ SE.svg
+            [ SA.viewBox 0.0 0.0 viewBoxSize viewBoxSize ]
+            [ SE.g []
+            (drawCube edges vert2Ds)
+            ]
         ]
-        [ HH.text label ]
+    where
+        renderButton label query =
+            HH.button
+            [ HP.title label
+            , HE.onClick (\_ -> query)
+            ]
+            [ HH.text label ]
 
-    -- parallel projection
-    project :: Point3D -> Point2D
-    project p =
-      { x: p.x + viewCenter.x
-      , y: p.y + viewCenter.y
-      }
+        -- parallel projection
+        project :: Point3D -> Point2D
+        project p =
+            { x: p.x + viewCenter.x
+            , y: p.y + viewCenter.y
+            }
 
-    drawCube :: Array Edge -> Array Point2D -> Array (H.ComponentHTML Query)
-    drawCube edges vert2Ds =
-      drawEdges edges vert2Ds <> drawVertices vert2Ds
+        drawCube :: forall m. Array Edge -> Array Point2D -> Array (H.ComponentHTML Action () m)
+        drawCube edges vert2Ds =
+            drawEdges edges vert2Ds <> drawVertices vert2Ds
 
-    drawEdges :: Array Edge -> Array Point2D -> Array (H.ComponentHTML Query)
-    drawEdges edges verts = let
-        connectedVerts = map (\(Tuple v1 v2) -> Tuple (verts !! v1) (verts !! v2)) edges
-      in
-        map (\(Tuple v1 v2) -> drawLine (getPoint v1) (getPoint v2)) connectedVerts
+        drawEdges :: forall m. Array Edge -> Array Point2D -> Array (H.ComponentHTML Action () m)
+        drawEdges edges verts = let
+            connectedVerts = map (\(Tuple v1 v2) -> Tuple (verts !! v1) (verts !! v2)) edges
+            in
+            map (\(Tuple v1 v2) -> drawLine (getPoint v1) (getPoint v2)) connectedVerts
 
-    getPoint :: Maybe Point2D -> Point2D
-    getPoint maybePoint = let
-       default = { x: 100.0, y: 100.0 }
-      in
-        fromMaybe default maybePoint
+        getPoint :: Maybe Point2D -> Point2D
+        getPoint maybePoint = let
+            default = { x: 100.0, y: 100.0 }
+            in
+            fromMaybe default maybePoint
 
-    drawLine :: Point2D -> Point2D -> H.ComponentHTML Query
-    drawLine a b =
-      SE.path
-        [ SA.d
-          [ SA.Abs (SA.M a.x a.y)
-          , SA.Abs (SA.L b.x b.y)
-          ]
-        , SA.stroke $ Just (SA.RGB 50 50 50)
-        ]
+        drawVertices :: forall m. Array Point2D -> Array (H.ComponentHTML Action () m)
+        drawVertices vert2Ds =
+            mapWithIndex drawVertex vert2Ds
 
-    drawVertices :: Array Point2D -> Array (H.ComponentHTML Query)
-    drawVertices vert2Ds =
-      mapWithIndex drawVertex vert2Ds
 
-    drawVertex :: Int -> Point2D -> H.ComponentHTML Query
-    drawVertex idx {x, y} = SE.g []
-      [ SE.text
-          [ SA.x $ x + 5.0
-          , SA.y $ y - 5.0
-          , SA.fill $ Just (SA.RGB 150 150 150)
-          ]
-          [ HH.text $ show idx ]
-      , SE.circle
-          [ SA.r 3.0
-          , SA.cx x
-          , SA.cy y
-          , SA.fill $ Just (SA.RGB 100 100 100)
-          ]
-      ]
+        drawLine :: forall m. Point2D -> Point2D -> H.ComponentHTML Action () m
+        drawLine a b =
+            SE.line 
+            [
+              SA.x1 a.x
+            , SA.x2 b.x
+            , SA.y1 a.y
+            , SA.y2 b.y
+            , SA.stroke $ Just (SA.RGB 50 50 50)
+            ]
+
+        drawVertex :: forall m. Int -> Point2D -> H.ComponentHTML Action () m
+        drawVertex idx {x, y} = SE.g []
+            [ SE.text
+                [ SA.x $ x + 5.0
+                , SA.y $ y - 5.0
+                , SA.fill $ Just (SA.RGB 150 150 150)
+                ]
+                [ HH.text $ show idx ]
+            , SE.circle
+                [ SA.r 3.0
+                , SA.cx x
+                , SA.cy y
+                , SA.fill $ Just (SA.RGB 100 100 100)
+                ]
+            ]
