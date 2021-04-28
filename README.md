@@ -7,8 +7,10 @@
 * spago build -w
 
 
-To see the code running
+###To run it in WEB###
+
 * spago bundle-app --to dist/app.js
+
 Then open 
 $ project_dir/dist/index.html to see the cube
 
