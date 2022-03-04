@@ -146,38 +146,48 @@ cubes =
         render :: forall m. State -> H.ComponentHTML Action () m
         render = renderView
 
-        handleAction :: forall output m. Action -> H.HalogenM State Action () output m Unit
+        runFunction :: _ -> H.HalogenM State Action () output m Unit
+        runFunction fn = do
+          _ <- H.modify fn
+          pure unit
+
+        handleAction :: Action -> H.HalogenM State Action () output m Unit
         handleAction query = case query of
             DecAngVelocity axis -> H.modify_ \state -> state
-            IncAngVelocity axis -> do
-                    cube <- H.get
-                    let {xa, ya, za} = cube.angVel
-                    _ <- H.modify (\c ->
-                          case axis of
-                            X -> c { angVel { xa = xa + accelerateBy } }
-                            Y -> c { angVel { ya = ya + accelerateBy } }
-                            Z -> c { angVel { za = za + accelerateBy } }
-                        )
-                    pure unit
+            IncAngVelocity axis -> runFunction  (\c -> incAngVelocity axis c)
 
         handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
         handleQuery = case _ of
           Tick a -> do
-            cube <- H.get
-            let angVel = cube.angVel
-                {vertices, edges} = cube.shape
-                newShape =
-                  { edges: edges
-                  , vertices: rotateShape vertices (anglePerFrame angVel)
-                  }
-                newCube = cube
-                  { angVel = dampenAngVelocity angVel
-                  , shape = newShape
-                  }
-            H.put newCube
+            _ <- H.modify (\c -> tick c)
             pure (Just a)
           Other a -> 
             pure (Just a)
+
+     
+incAngVelocity :: Axis -> RotatingShape -> RotatingShape
+incAngVelocity axis c = do 
+  let {xa, ya, za} = c.angVel
+  case axis of
+    X -> c { angVel { xa = xa + accelerateBy } }
+    Y -> c { angVel { ya = ya + accelerateBy } }
+    Z -> c { angVel { za = za + accelerateBy } }
+
+
+
+tick :: RotatingShape -> RotatingShape
+tick c =  do
+  let angVel = c.angVel
+      {vertices, edges} = c.shape
+      newShape =
+        { edges : edges
+        , vertices: rotateShape vertices (anglePerFrame angVel)
+        }
+      newCube = c
+        { angVel = dampenAngVelocity angVel
+        , shape = newShape
+        }
+  newCube
 
 
 rotateShape :: Array Point3D -> AngVelocity3D -> Array Point3D
