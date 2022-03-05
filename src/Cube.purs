@@ -47,7 +47,7 @@ type Angle3D =
 
 type AngVelocity3D = Angle3D -- velocity = angle/sec
 
-type RotatingShape =
+type Cube =
   { shape :: Shape
   , angVel :: AngVelocity3D
   , forward :: Boolean
@@ -56,7 +56,7 @@ type RotatingShape =
 data Axis = X | Y | Z
 
 -- Model / State
-type State = RotatingShape
+type State = Cube
 
 -- Values
 
@@ -84,7 +84,7 @@ accelerateBy = oneDegInRad * 50.0
 dampenPercent :: Number
 dampenPercent = 1.0 - (0.9 / frameRate) -- 10% per second
 
-initCube :: State
+initCube :: Cube
 initCube =
   { shape:
       { vertices:
@@ -165,7 +165,7 @@ cubes =
             pure (Just a)
 
      
-incAngVelocity :: Axis -> RotatingShape -> RotatingShape
+incAngVelocity :: Axis -> Cube -> Cube
 incAngVelocity axis c = do 
   let {xa, ya, za} = c.angVel
   case axis of
@@ -175,7 +175,7 @@ incAngVelocity axis c = do
 
 
 
-tick :: RotatingShape -> RotatingShape
+tick :: Cube -> Cube
 tick c =  do
   let angVel = c.angVel
       {vertices, edges} = c.shape
@@ -225,7 +225,7 @@ dampenAngVelocity {xa, ya, za} =
 
 ---------------------------------------------------------------------------------------
 
-renderView :: forall m. State -> H.ComponentHTML Action () m
+renderView :: forall m. Cube -> H.ComponentHTML Action () m
 renderView state = let
         {vertices, edges} = state.shape
         vert2Ds = map project vertices
