@@ -3,7 +3,7 @@ module Cube where
 import Prelude
 
 import Data.Tuple
-import Data.Array (mapWithIndex, (!!))
+import Data.Array (mapWithIndex, (!!), snoc, take, length)
 import Data.Maybe (Maybe(..), fromMaybe)
 
 import Halogen as H
@@ -51,12 +51,13 @@ type Cube =
   { shape :: Shape
   , angVel :: AngVelocity3D
   , forward :: Boolean
+  , uid :: Identifier
   }
 
 data Axis = X | Y | Z
 
 -- Model / State
-type State = Cube
+type State = Array Cube 
 
 -- Values
 
@@ -83,6 +84,8 @@ accelerateBy = oneDegInRad * 50.0
 
 dampenPercent :: Number
 dampenPercent = 1.0 - (0.9 / frameRate) -- 10% per second
+
+type Identifier = Int
 
 initCube :: Cube
 initCube =
@@ -118,6 +121,7 @@ initCube =
       , za: tenDegInRad
       }
   , forward: true
+  , uid: 1
   }
 
 data Query a = Tick a | Other a
@@ -126,7 +130,9 @@ data Query a = Tick a | Other a
 data Action
   = DecAngVelocity Axis
   | IncAngVelocity Axis
-
+  | Reverse Identifier
+  | AddCube
+  | DeleteCube
 
 cubes :: forall query input output m. H.Component Query input output m
 cubes =
@@ -140,11 +146,11 @@ cubes =
               }
         }
     where
-        initialState :: State
-        initialState = initCube
+        initialState :: State 
+        initialState = [initCube]
 
         render :: forall m. State -> H.ComponentHTML Action () m
-        render = renderView
+        render state = HH.div[][HH.ul[]$map renderView state]
 
         runFunction :: _ -> H.HalogenM State Action () output m Unit
         runFunction fn = do
@@ -154,26 +160,30 @@ cubes =
         handleAction :: Action -> H.HalogenM State Action () output m Unit
         handleAction query = case query of
             DecAngVelocity axis -> H.modify_ \state -> state
-            IncAngVelocity axis -> runFunction  (\c -> incAngVelocity axis c)
+            IncAngVelocity axis -> runFunction  (\c -> map (incAngVelocity axis) c)
+            Reverse id -> runFunction (\c -> map (reverseCube id) c)
+            AddCube -> runFunction(\c -> snoc c initCube {uid = initCube.uid + 1})
+            DeleteCube -> runFunction (\c -> take (length c - 1) c)
 
         handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
         handleQuery = case _ of
           Tick a -> do
-            _ <- H.modify (\c -> tick c)
+            _ <- H.modify (\c -> map tick c)
             pure (Just a)
           Other a -> 
             pure (Just a)
 
-     
+reverseCube :: Int -> Cube -> Cube
+reverseCube id cube = 
+    if (id == cube.uid) then cube { forward = not cube.forward } else cube
+
 incAngVelocity :: Axis -> Cube -> Cube
 incAngVelocity axis c = do 
   let {xa, ya, za} = c.angVel
   case axis of
-    X -> c { angVel { xa = xa + accelerateBy } }
-    Y -> c { angVel { ya = ya + accelerateBy } }
-    Z -> c { angVel { za = za + accelerateBy } }
-
-
+    X -> c { angVel { xa = if c.forward then xa + accelerateBy else xa - accelerateBy} }
+    Y -> c { angVel { ya = if c.forward then ya + accelerateBy else ya - accelerateBy} }
+    Z -> c { angVel { za = if c.forward then za + accelerateBy else za - accelerateBy} }
 
 tick :: Cube -> Cube
 tick c =  do
@@ -234,6 +244,9 @@ renderView state = let
         [ renderButton "rotX++" (IncAngVelocity X)
         , renderButton "rotY++" (IncAngVelocity Y)
         , renderButton "rotZ++" (IncAngVelocity Z)
+        , renderButton "reverse" (Reverse state.uid)
+        , renderButton "Add" (AddCube)
+        , renderButton "Delete" (DeleteCube)
         ]
         <>
         [ SE.svg

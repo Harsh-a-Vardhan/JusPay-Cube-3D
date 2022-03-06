@@ -77,6 +77,29 @@ var IncAngVelocity = (function () {
     };
     return IncAngVelocity;
 })();
+var Reverse = (function () {
+    function Reverse(value0) {
+        this.value0 = value0;
+    };
+    Reverse.create = function (value0) {
+        return new Reverse(value0);
+    };
+    return Reverse;
+})();
+var AddCube = (function () {
+    function AddCube() {
+
+    };
+    AddCube.value = new AddCube();
+    return AddCube;
+})();
+var DeleteCube = (function () {
+    function DeleteCube() {
+
+    };
+    DeleteCube.value = new DeleteCube();
+    return DeleteCube;
+})();
 var viewBoxSize = 600.0;
 var viewCenter = {
     x: viewBoxSize / 2.0,
@@ -120,16 +143,30 @@ var rotate = function (v) {
             };
         };
     };
-    var $82 = rotateZ(v.za);
-    var $83 = rotateY(v.ya);
-    var $84 = rotateX(v.xa);
-    return function ($85) {
-        return $82($83($84($85)));
+    var $89 = rotateZ(v.za);
+    var $90 = rotateY(v.ya);
+    var $91 = rotateX(v.xa);
+    return function ($92) {
+        return $89($90($91($92)));
     };
 };
 var rotateShape = function (vertices) {
     return function (ang) {
         return Data_Functor.map(Data_Functor.functorArray)(rotate(ang))(vertices);
+    };
+};
+var reverseCube = function (id) {
+    return function (cube) {
+        var $49 = id === cube.uid;
+        if ($49) {
+            return {
+                shape: cube.shape,
+                angVel: cube.angVel,
+                forward: !cube.forward,
+                uid: cube.uid
+            };
+        };
+        return cube;
     };
 };
 var renderView = function (state) {
@@ -182,7 +219,7 @@ var renderView = function (state) {
         };
     };
     var vert2Ds = Data_Functor.map(Data_Functor.functorArray)(project)(state.shape.vertices);
-    return Halogen_HTML_Elements.div([  ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ renderButton("rotX++")(new IncAngVelocity(X.value)), renderButton("rotY++")(new IncAngVelocity(Y.value)), renderButton("rotZ++")(new IncAngVelocity(Z.value)) ])([ Halogen_Svg_Elements.svg([ Halogen_Svg_Attributes.viewBox(0.0)(0.0)(viewBoxSize)(viewBoxSize) ])([ Halogen_Svg_Elements.g([  ])(drawCube(state.shape.edges)(vert2Ds)) ]) ]));
+    return Halogen_HTML_Elements.div([  ])(Data_Semigroup.append(Data_Semigroup.semigroupArray)([ renderButton("rotX++")(new IncAngVelocity(X.value)), renderButton("rotY++")(new IncAngVelocity(Y.value)), renderButton("rotZ++")(new IncAngVelocity(Z.value)), renderButton("reverse")(new Reverse(state.uid)), renderButton("Add")(AddCube.value), renderButton("Delete")(DeleteCube.value) ])([ Halogen_Svg_Elements.svg([ Halogen_Svg_Attributes.viewBox(0.0)(0.0)(viewBoxSize)(viewBoxSize) ])([ Halogen_Svg_Elements.g([  ])(drawCube(state.shape.edges)(vert2Ds)) ]) ]));
 };
 var oneDegInRad = 1.745329255e-2;
 var tenDegInRad = oneDegInRad * 10.0;
@@ -228,7 +265,8 @@ var initCube = {
         ya: tenDegInRad,
         za: tenDegInRad
     },
-    forward: true
+    forward: true,
+    uid: 1
 };
 var frameRate = 200.0;
 var dampenPercent = 1.0 - 0.9 / frameRate;
@@ -257,7 +295,8 @@ var tick = function (c) {
     var newCube = {
         angVel: dampenAngVelocity(c.angVel),
         shape: newShape,
-        forward: c.forward
+        forward: c.forward,
+        uid: c.uid
     };
     return newCube;
 };
@@ -268,11 +307,17 @@ var incAngVelocity = function (axis) {
             return {
                 shape: c.shape,
                 angVel: {
-                    xa: c.angVel.xa + accelerateBy,
+                    xa: (function () {
+                        if (c.forward) {
+                            return c.angVel.xa + accelerateBy;
+                        };
+                        return c.angVel.xa - accelerateBy;
+                    })(),
                     ya: c.angVel.ya,
                     za: c.angVel.za
                 },
-                forward: c.forward
+                forward: c.forward,
+                uid: c.uid
             };
         };
         if (axis instanceof Y) {
@@ -280,10 +325,16 @@ var incAngVelocity = function (axis) {
                 shape: c.shape,
                 angVel: {
                     xa: c.angVel.xa,
-                    ya: c.angVel.ya + accelerateBy,
+                    ya: (function () {
+                        if (c.forward) {
+                            return c.angVel.ya + accelerateBy;
+                        };
+                        return c.angVel.ya - accelerateBy;
+                    })(),
                     za: c.angVel.za
                 },
-                forward: c.forward
+                forward: c.forward,
+                uid: c.uid
             };
         };
         if (axis instanceof Z) {
@@ -292,12 +343,18 @@ var incAngVelocity = function (axis) {
                 angVel: {
                     xa: c.angVel.xa,
                     ya: c.angVel.ya,
-                    za: c.angVel.za + accelerateBy
+                    za: (function () {
+                        if (c.forward) {
+                            return c.angVel.za + accelerateBy;
+                        };
+                        return c.angVel.za - accelerateBy;
+                    })()
                 },
-                forward: c.forward
+                forward: c.forward,
+                uid: c.uid
             };
         };
-        throw new Error("Failed pattern match at Cube (line 171, column 3 - line 174, column 49): " + [ axis.constructor.name ]);
+        throw new Error("Failed pattern match at Cube (line 183, column 3 - line 186, column 89): " + [ axis.constructor.name ]);
     };
 };
 var cubes = (function () {
@@ -306,10 +363,14 @@ var cubes = (function () {
             return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(Data_Unit.unit);
         });
     };
+    var render = function (state) {
+        return Halogen_HTML_Elements.div([  ])([ Halogen_HTML_Elements.ul([  ])(Data_Functor.map(Data_Functor.functorArray)(renderView)(state)) ]);
+    };
+    var initialState = [ initCube ];
     var handleQuery = function (v) {
         if (v instanceof Tick) {
             return Control_Bind.bind(Halogen_Query_HalogenM.bindHalogenM)(Control_Monad_State_Class.modify(Halogen_Query_HalogenM.monadStateHalogenM)(function (c) {
-                return tick(c);
+                return Data_Functor.map(Data_Functor.functorArray)(tick)(c);
             }))(function () {
                 return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(new Data_Maybe.Just(v.value0));
             });
@@ -317,7 +378,7 @@ var cubes = (function () {
         if (v instanceof Other) {
             return Control_Applicative.pure(Halogen_Query_HalogenM.applicativeHalogenM)(new Data_Maybe.Just(v.value0));
         };
-        throw new Error("Failed pattern match at Cube (line 160, column 23 - line 165, column 26): " + [ v.constructor.name ]);
+        throw new Error("Failed pattern match at Cube (line 169, column 23 - line 174, column 26): " + [ v.constructor.name ]);
     };
     var handleAction = function (query) {
         if (query instanceof DecAngVelocity) {
@@ -327,14 +388,34 @@ var cubes = (function () {
         };
         if (query instanceof IncAngVelocity) {
             return runFunction(function (c) {
-                return incAngVelocity(query.value0)(c);
+                return Data_Functor.map(Data_Functor.functorArray)(incAngVelocity(query.value0))(c);
             });
         };
-        throw new Error("Failed pattern match at Cube (line 155, column 30 - line 157, column 78): " + [ query.constructor.name ]);
+        if (query instanceof Reverse) {
+            return runFunction(function (c) {
+                return Data_Functor.map(Data_Functor.functorArray)(reverseCube(query.value0))(c);
+            });
+        };
+        if (query instanceof AddCube) {
+            return runFunction(function (c) {
+                return Data_Array.snoc(c)({
+                    shape: initCube.shape,
+                    angVel: initCube.angVel,
+                    forward: initCube.forward,
+                    uid: initCube.uid + 1 | 0
+                });
+            });
+        };
+        if (query instanceof DeleteCube) {
+            return runFunction(function (c) {
+                return Data_Array.take(Data_Array.length(c) - 1 | 0)(c);
+            });
+        };
+        throw new Error("Failed pattern match at Cube (line 161, column 30 - line 166, column 68): " + [ query.constructor.name ]);
     };
     return Halogen_Component.mkComponent({
-        initialState: Data_Function["const"](initCube),
-        render: renderView,
+        initialState: Data_Function["const"](initialState),
+        render: render,
         "eval": Halogen_Component.mkEval({
             handleAction: handleAction,
             handleQuery: handleQuery,
@@ -360,7 +441,11 @@ module.exports = {
     Other: Other,
     DecAngVelocity: DecAngVelocity,
     IncAngVelocity: IncAngVelocity,
+    Reverse: Reverse,
+    AddCube: AddCube,
+    DeleteCube: DeleteCube,
     cubes: cubes,
+    reverseCube: reverseCube,
     incAngVelocity: incAngVelocity,
     tick: tick,
     rotateShape: rotateShape,
