@@ -12,6 +12,7 @@ You can edit this file as you like.
   , "js-timers"
   , "math"
   , "maybe"
+  , "numbers"
   , "prelude"
   , "psci-support"
   , "tuples"

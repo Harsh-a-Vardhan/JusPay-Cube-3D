@@ -5,6 +5,7 @@ import Prelude
 import Data.Tuple
 import Data.Array (mapWithIndex, (!!), snoc, take, length)
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Number.Format (toString)
 
 import Halogen as H
 import Halogen.HTML as HH
@@ -52,12 +53,15 @@ type Cube =
   , angVel :: AngVelocity3D
   , forward :: Boolean
   , uid :: Identifier
+  , speedFactor :: Speed
   }
 
 data Axis = X | Y | Z
 
 -- Model / State
 type State = Array Cube 
+
+type Speed = Number
 
 -- Values
 
@@ -122,6 +126,7 @@ initCube =
       }
   , forward: true
   , uid: 1
+  , speedFactor: 1.0
   }
 
 data Query a = Tick a | Other a
@@ -133,6 +138,8 @@ data Action
   | Reverse Identifier
   | AddCube
   | DeleteCube
+  | IncSpeed Identifier
+  | DecSpeed Identifier
 
 cubes :: forall query input output m. H.Component Query input output m
 cubes =
@@ -164,6 +171,8 @@ cubes =
             Reverse id -> runFunction (\c -> map (reverseCube id) c)
             AddCube -> runFunction(\c -> snoc c initCube {uid = initCube.uid + 1})
             DeleteCube -> runFunction (\c -> take (length c - 1) c)
+            IncSpeed id -> runFunction (\c -> map (incSpeed id) c)
+            DecSpeed id -> runFunction (\c -> map (decSpeed id) c)
 
         handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
         handleQuery = case _ of
@@ -177,13 +186,21 @@ reverseCube :: Int -> Cube -> Cube
 reverseCube id cube = 
     if (id == cube.uid) then cube { forward = not cube.forward } else cube
 
+incSpeed :: Int -> Cube -> Cube
+incSpeed id cube = 
+    if (id == cube.uid) then cube { speedFactor = cube.speedFactor + 20.0 } else cube
+
+decSpeed :: Int -> Cube -> Cube
+decSpeed id cube = 
+    if (id == cube.uid) then cube { speedFactor = cube.speedFactor - 20.0 } else cube
+
 incAngVelocity :: Axis -> Cube -> Cube
 incAngVelocity axis c = do 
   let {xa, ya, za} = c.angVel
   case axis of
-    X -> c { angVel { xa = if c.forward then xa + accelerateBy else xa - accelerateBy} }
-    Y -> c { angVel { ya = if c.forward then ya + accelerateBy else ya - accelerateBy} }
-    Z -> c { angVel { za = if c.forward then za + accelerateBy else za - accelerateBy} }
+    X -> c { angVel { xa = if c.forward then xa + accelerateBy + c.speedFactor else xa - accelerateBy - c.speedFactor} }
+    Y -> c { angVel { ya = if c.forward then ya + accelerateBy + c.speedFactor else ya - accelerateBy - c.speedFactor} }
+    Z -> c { angVel { za = if c.forward then za + accelerateBy + c.speedFactor else za - accelerateBy - c.speedFactor} }
 
 tick :: Cube -> Cube
 tick c =  do
@@ -245,8 +262,12 @@ renderView state = let
         , renderButton "rotY++" (IncAngVelocity Y)
         , renderButton "rotZ++" (IncAngVelocity Z)
         , renderButton "reverse" (Reverse state.uid)
+        , HH.text ("Direction " <> if state.forward then "Forward" else "Reverse")
         , renderButton "Add" (AddCube)
         , renderButton "Delete" (DeleteCube)
+        , renderButton "++" (IncSpeed state.uid)
+        , renderButton "--" (DecSpeed state.uid)
+        , HH.text ("Speed " <> toString state.speedFactor)
         ]
         <>
         [ SE.svg
