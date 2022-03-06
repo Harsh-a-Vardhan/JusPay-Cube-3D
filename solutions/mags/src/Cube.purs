@@ -3,7 +3,7 @@ module Cube where
 import Prelude
 
 import Data.Tuple
-import Data.Array (mapWithIndex, (!!))
+import Data.Array (mapWithIndex, (!!),snoc, length, drop)
 import Data.Maybe (Maybe(..), fromMaybe)
 
 import Halogen as H
@@ -51,12 +51,14 @@ type Cube =
   { shape :: Shape
   , angVel :: AngVelocity3D
   , forward :: Boolean
+  , addlSpeed :: Number
+  , id :: Int
   }
 
 data Axis = X | Y | Z
 
 -- Model / State
-type State = Cube
+type State = Array Cube
 
 -- Values
 
@@ -118,6 +120,8 @@ initCube =
       , za: tenDegInRad
       }
   , forward: true
+  , addlSpeed : 0.0
+  , id : 1
   }
 
 data Query a = Tick a | Other a
@@ -126,6 +130,11 @@ data Query a = Tick a | Other a
 data Action
   = DecAngVelocity Axis
   | IncAngVelocity Axis
+  | Reverse Int
+  | IncSpeed Int
+  | DecSpeed Int
+  | AddCube
+  | RemoveCube
 
 
 cubes :: forall query input output m. H.Component Query input output m
@@ -141,10 +150,10 @@ cubes =
         }
     where
         initialState :: State
-        initialState = initCube
+        initialState = [initCube]
 
         render :: forall m. State -> H.ComponentHTML Action () m
-        render = renderView
+        render state = HH.div[][HH.ul[]$map renderView state]
 
         runFunction :: _ -> H.HalogenM State Action () output m Unit
         runFunction fn = do
@@ -154,24 +163,38 @@ cubes =
         handleAction :: Action -> H.HalogenM State Action () output m Unit
         handleAction query = case query of
             DecAngVelocity axis -> H.modify_ \state -> state
-            IncAngVelocity axis -> runFunction  (\c -> incAngVelocity axis c)
+            IncAngVelocity axis -> runFunction  (\c -> map (incAngVelocity axis) c)
+            Reverse id -> runFunction  (\c -> map (reverse id) c)
+            IncSpeed id -> runFunction  (\c -> map (incSpeed id) c)
+            DecSpeed id -> runFunction  (\c -> map (decSpeed id) c)
+            AddCube -> runFunction  (\c -> snoc c initCube{id=(length c + 1)})
+            RemoveCube -> runFunction  (\c -> drop 1 c)
 
         handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
         handleQuery = case _ of
           Tick a -> do
-            _ <- H.modify (\c -> tick c)
+            _ <- H.modify (\c -> map tick c)
             pure (Just a)
           Other a -> 
             pure (Just a)
+
+reverse :: Int -> Cube -> Cube
+reverse id c = if id==c.id then c{forward=not c.forward} else c
+
+incSpeed :: Int -> Cube -> Cube
+incSpeed id c = if id==c.id then c{addlSpeed= c.addlSpeed + 1.0 } else c
+
+decSpeed :: Int -> Cube -> Cube
+decSpeed id c = if id==c.id then c{addlSpeed= c.addlSpeed - 1.0 } else c
 
      
 incAngVelocity :: Axis -> Cube -> Cube
 incAngVelocity axis c = do 
   let {xa, ya, za} = c.angVel
   case axis of
-    X -> c { angVel { xa = xa + accelerateBy } }
-    Y -> c { angVel { ya = ya + accelerateBy } }
-    Z -> c { angVel { za = za + accelerateBy } }
+    X -> c { angVel { xa = if c.forward then xa + accelerateBy + c.addlSpeed else xa - accelerateBy - c.addlSpeed }}
+    Y -> c { angVel { ya = if c.forward then ya + accelerateBy + c.addlSpeed else ya - accelerateBy - c.addlSpeed }}
+    Z -> c { angVel { za = if c.forward then za + accelerateBy + c.addlSpeed else za - accelerateBy - c.addlSpeed }}
 
 
 
@@ -231,9 +254,21 @@ renderView state = let
         vert2Ds = map project vertices
     in
         HH.div [] $
-        [ renderButton "rotX++" (IncAngVelocity X)
-        , renderButton "rotY++" (IncAngVelocity Y)
-        , renderButton "rotZ++" (IncAngVelocity Z)
+        [  renderButton "rotX++" (IncAngVelocity X) 
+        ,  renderButton "rotY++" (IncAngVelocity Y) 
+        ,  renderButton "rotZ++" (IncAngVelocity Z) 
+        , if state.id==1 then renderButton "Add" (AddCube) else HH.text ("")
+        , if state.id==1 then renderButton "Remove" (RemoveCube) else HH.text ("")
+        , HH.br_
+        , HH.text ("cube no: " <> show state.id)
+        , renderButton "reverse" (Reverse state.id) 
+        , renderButton "vel++" (IncSpeed state.id)
+        , renderButton "vel--" (DecSpeed state.id)
+        , HH.br_
+        , HH.text ("reverse is " <> show state.forward)
+        , HH.br_
+        , HH.text ("additional speed is " <> show state.addlSpeed)
+        
         ]
         <>
         [ SE.svg
