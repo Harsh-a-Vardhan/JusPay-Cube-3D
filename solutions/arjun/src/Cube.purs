@@ -136,6 +136,7 @@ data Action
   | IncAngVelocity Axis
   | Reverse Number
   | IncVel Number
+  | DecVel Number
   | AddCube
   | DropCube
 
@@ -169,6 +170,7 @@ cubes =
             IncAngVelocity axis -> runFunction  (\c -> map (incAngVelocity axis) c)
             Reverse id -> runFunction (\c -> map (reverse id) c)
             IncVel id -> runFunction (\c -> map (incVel id) c)
+            DecVel id -> runFunction (\c -> map (decVel id) c)
             AddCube -> runFunction (\c -> snoc (map updateCounter c) initCube)
             DropCube -> runFunction (\c -> drop 1 c)
 
@@ -202,7 +204,17 @@ incVel :: Number -> Cube -> Cube
 incVel id c = do
   let {xa, ya, za} = c.angVel
   let velocity = c.velocity
-  c { velocity = velocity + 5.0}
+  c { velocity = 
+        if id == c.counter then velocity + 5.0 
+        else velocity}
+
+decVel :: Number -> Cube -> Cube
+decVel id c = do
+  let {xa, ya, za} = c.angVel
+  let velocity = c.velocity
+  c { velocity = 
+        if id == c.counter then velocity - 5.0 
+        else velocity}        
 
 updateCounter :: Cube ->  Cube
 updateCounter c = do 
@@ -272,11 +284,12 @@ renderView state = let
         , renderButton "rotZ++" (IncAngVelocity Z)
         , renderButton "reverse" (Reverse state.counter)
         , renderButton "incVel" (IncVel state.counter)
+        , renderButton "decVel" (DecVel state.counter)
         , renderButton "addCube" (AddCube)
         , renderButton "dropCube" (DropCube)
         , HH.text (show state.forward)
         , HH.text (show state.counter)
-        , HH.text (show state.velocity)
+        , HH.text (show state.velocity) 
         ]
         <>
         [ SE.svg
