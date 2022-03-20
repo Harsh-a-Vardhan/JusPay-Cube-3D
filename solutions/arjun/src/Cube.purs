@@ -205,7 +205,7 @@ incVel id c = do
   let {xa, ya, za} = c.angVel
   let velocity = c.velocity
   c { velocity = 
-        if id == c.counter then velocity + 5.0 
+        if id == c.counter then velocity * 2.0 
         else velocity}
 
 decVel :: Number -> Cube -> Cube
@@ -213,10 +213,7 @@ decVel id c = do
   let {xa, ya, za} = c.angVel
   let velocity = c.velocity
   c { velocity = 
-        if id == c.counter then 
-          if velocity - 5.0 > 0.0 
-            then velocity - 5.0
-          else 1.0
+        if id == c.counter then velocity * 0.5
         else velocity}        
 
 updateCounter :: Cube ->  Cube
