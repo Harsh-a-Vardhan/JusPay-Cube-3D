@@ -1,0 +1,17 @@
+{
+  "name": "cube-rotation",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "^5.0.1",
+    "purescript-console": "^5.0.0",
+    "purescript-effect": "^3.0.0"
+  },
+  "devDependencies": {
+    "purescript-psci-support": "^5.0.0"
+  }
+}

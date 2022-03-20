@@ -53,6 +53,7 @@ type Cube =
   , angVel :: AngVelocity3D
   , forward :: Boolean
   , counter :: Number
+  , velocity :: Number
   }
 
 data Axis = X | Y | Z
@@ -124,6 +125,7 @@ initCube =
       }
   , forward: true
   , counter: 1.0
+  , velocity: 1.0
   }
 
 data Query a = Tick a | Other a
@@ -133,7 +135,7 @@ data Action
   = DecAngVelocity Axis
   | IncAngVelocity Axis
   | Reverse Number
-  | IncVel
+  | IncVel Number
   | AddCube
   | DropCube
 
@@ -166,7 +168,7 @@ cubes =
             DecAngVelocity axis -> H.modify_ \state -> state
             IncAngVelocity axis -> runFunction  (\c -> map (incAngVelocity axis) c)
             Reverse id -> runFunction (\c -> map (reverse id) c)
-            IncVel -> runFunction (\c -> map incVel c)
+            IncVel id -> runFunction (\c -> map (incVel id) c)
             AddCube -> runFunction (\c -> snoc (map updateCounter c) initCube)
             DropCube -> runFunction (\c -> drop 1 c)
 
@@ -182,11 +184,12 @@ cubes =
 incAngVelocity :: Axis -> Cube -> Cube
 incAngVelocity axis c = do 
   let {xa, ya, za} = c.angVel
+  let velocity = c.velocity
   let dir = c.forward
   case axis of
-    X -> c { angVel { xa = if dir then xa + accelerateBy else xa - accelerateBy} }
-    Y -> c { angVel { ya = if dir then ya + accelerateBy else ya - accelerateBy } }
-    Z -> c { angVel { za = if dir then za + accelerateBy else za - accelerateBy} }
+    X -> c { angVel { xa = if dir then xa + accelerateBy + velocity else xa - accelerateBy - velocity} }
+    Y -> c { angVel { ya = if dir then ya + accelerateBy + velocity else ya - accelerateBy - velocity} }
+    Z -> c { angVel { za = if dir then za + accelerateBy + velocity else za - accelerateBy - velocity} }
 
 
 
@@ -195,10 +198,11 @@ reverse id c = c {forward =
                   if id == c.counter then not c.forward
                   else c.forward}
 
-incVel :: Cube -> Cube
-incVel c = do
+incVel :: Number -> Cube -> Cube
+incVel id c = do
   let {xa, ya, za} = c.angVel
-  c { angVel { xa = xa + velChange}}
+  let velocity = c.velocity
+  c { velocity = velocity + 5.0}
 
 updateCounter :: Cube ->  Cube
 updateCounter c = do 
@@ -267,11 +271,12 @@ renderView state = let
         , renderButton "rotY++" (IncAngVelocity Y)
         , renderButton "rotZ++" (IncAngVelocity Z)
         , renderButton "reverse" (Reverse state.counter)
-        , renderButton "incVel" (IncVel)
+        , renderButton "incVel" (IncVel state.counter)
         , renderButton "addCube" (AddCube)
         , renderButton "dropCube" (DropCube)
         , HH.text (show state.forward)
         , HH.text (show state.counter)
+        , HH.text (show state.velocity)
         ]
         <>
         [ SE.svg
