@@ -1,10 +1,12 @@
-module Cube where
+module Cube
+  where
 
 import Prelude
 
 import Data.Tuple
-import Data.Array (mapWithIndex, (!!), insert, drop)
+import Data.Array (mapWithIndex, (!!),snoc,take,length)
 import Data.Maybe (Maybe(..), fromMaybe)
+
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -51,7 +53,7 @@ type Cube =
   , angVel :: AngVelocity3D
   , forward :: Boolean
   , speed :: Number
-  , identifier :: Number
+  , id :: Number
   }
 
 data Axis = X | Y | Z
@@ -80,10 +82,7 @@ tenDegInRad :: Angle
 tenDegInRad = oneDegInRad * 10.0
 
 accelerateBy :: Number
-accelerateBy = oneDegInRad * 100.0
-
--- speed :: Number
--- speed = 50
+accelerateBy = oneDegInRad * 50.0
 
 dampenPercent :: Number
 dampenPercent = 1.0 - (0.9 / frameRate) -- 10% per second
@@ -122,8 +121,8 @@ initCube =
       , za: tenDegInRad
       }
   , forward: true
-  , speed : 100.0*0.01745329255
-  , identifier : 1.0
+  , speed: 1.0
+  , id: 1.0
   }
 
 data Query a = Tick a | Other a
@@ -131,10 +130,10 @@ data Query a = Tick a | Other a
 -- Events
 data Action
   = DecAngVelocity Axis
-  | IncAngVelocity Axis
-  | R
-  | Incspeed
-  | Decspeed
+  | IncAngVelocity Axis Number
+  | ReverseCube Number
+  | IncSpeed Number
+  | DecSpeed Number
   | AddCube 
   | RemoveCube
 
@@ -158,6 +157,7 @@ cubes =
         render state = HH.div[][HH.ul[]$map renderView state]
 
         runFunction :: _ -> H.HalogenM State Action () output m Unit
+
         runFunction fn = do
           _ <- H.modify fn
           pure unit
@@ -165,38 +165,40 @@ cubes =
         handleAction :: Action -> H.HalogenM State Action () output m Unit
         handleAction query = case query of
             DecAngVelocity axis -> H.modify_ \state -> state
-            IncAngVelocity axis -> runFunction  (\c -> map(incAngVelocity axis) c)
-            R -> runFunction (\c -> map(revCube) c)
-            Incspeed -> runFunction (\c -> map(accelerate) c)
-            Decspeed -> runFunction (\c -> map(decelerate) c)
-            AddCube -> runFunction (\c -> insert initCube {identifier = initCube.identifier + 1.0} c)
-            RemoveCube -> runFunction (\c -> drop 1spago bundle-app --to dist/app.js c)
+            IncAngVelocity axis id -> runFunction  (\c -> map (incAngVelocity axis id) c)
+            ReverseCube number  -> runFunction  (\c -> map (reverseCube number) c)
+            IncSpeed number -> runFunction (\c -> map (incSpeed number) c)
+            DecSpeed number -> runFunction (\c -> map (decSpeed number) c)
+            AddCube -> runFunction (\c ->  snoc c initCube{id=initCube.id+1.0} )
+            RemoveCube -> runFunction (\c -> take (length c-1) c)
 
         handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
         handleQuery = case _ of
           Tick a -> do
-            _ <- H.modify (\c -> map(tick) c)
+            _ <- H.modify (\c -> map tick c)
             pure (Just a)
-          Other a -> 
+          Other a ->
             pure (Just a)
 
-     
-incAngVelocity :: Axis -> Cube -> Cube
-incAngVelocity axis c = do 
+  
+incAngVelocity :: Axis -> Number -> Cube -> Cube
+incAngVelocity axis id c = do 
   let {xa, ya, za} = c.angVel
   case axis of
-    X -> c { angVel { xa = if c.forward then xa + c.speed else xa - c.speed} }
-    Y -> c { angVel { ya = if c.forward then ya + c.speed else ya - c.speed} }
-    Z -> c { angVel { za = if c.forward then za + c.speed else za - c.speed} }
+    X -> if id == c.id then c { angVel { xa = if c.forward == true then xa + accelerateBy+c.speed else xa-accelerateBy-c.speed }} else c
+    Y -> if id == c.id then c { angVel { ya = if c.forward == true then ya + accelerateBy+c.speed else ya-accelerateBy-c.speed }} else c
+    Z -> if id == c.id then c { angVel { za = if c.forward == true then za + accelerateBy+c.speed else za-accelerateBy-c.speed }} else c
 
-revCube :: Cube -> Cube
-revCube c = c { forward = not c.forward}
+reverseCube :: Number -> Cube -> Cube
+reverseCube id c = if id == c.id then c{forward= not c.forward} else c
 
-accelerate :: Cube -> Cube
-accelerate  c = c { speed = if c.forward then c.speed + 5.0 else if c.speed <= 5.0 then 0.0 else c.speed - 5.0}
+incSpeed :: Number -> Cube -> Cube
+incSpeed id c = if id == c.id then c{speed = 2.0*c.speed} else c
 
-decelerate :: Cube -> Cube
-decelerate  c = c { speed = if c.forward then if c.speed <= 5.0 then 0.0 else c.speed - 5.0 else c.speed + 5.0}
+decSpeed :: Number -> Cube -> Cube
+decSpeed id c = if id == c.id then c{speed = 0.5*c.speed} else c
+
+
 
 tick :: Cube -> Cube
 tick c =  do
@@ -254,14 +256,14 @@ renderView state = let
         vert2Ds = map project vertices
     in
         HH.div [] $
-        [ renderButton "rotX++" (IncAngVelocity X)
-        , renderButton "rotY++" (IncAngVelocity Y)
-        , renderButton "rotZ++" (IncAngVelocity Z)
-        , renderButton "reverse" (R)        
-        , renderButton "speed++" (Incspeed)
-        , renderButton "speed--" (Decspeed)
-        , renderButton "Add Cube" (AddCube)
-        , renderButton "Remove Cube" (RemoveCube)
+        [ renderButton "rotX++" (IncAngVelocity X state.id)
+        , renderButton "rotY++" (IncAngVelocity Y state.id)
+        , renderButton "rotZ++" (IncAngVelocity Z state.id) 
+        , renderButton "reverse"(ReverseCube state.id)
+        , renderButton "Vel++"(IncSpeed state.id)
+        , renderButton "Vel--"(DecSpeed state.id)
+        , renderButton "AddCube"(AddCube)
+        , renderButton "RemoveCube"(RemoveCube)
         ]
         <>
         [ SE.svg
