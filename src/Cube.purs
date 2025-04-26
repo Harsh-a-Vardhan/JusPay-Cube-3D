@@ -1,11 +1,12 @@
 module Cube where
 
 import Prelude
-
+import Data.Array
 import Data.Tuple
 import Data.Array (mapWithIndex, (!!))
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Array (Length)
+import Data.Maybe
+import Data.Array (length)
 
 import Halogen as H
 import Halogen.HTML as HH
@@ -52,12 +53,14 @@ type Cube =
   { shape :: Shape
   , angVel :: AngVelocity3D
   , forward :: Boolean
+  , velocity :: Number
+  , idl :: Int
   }
 
 data Axis = X | Y | Z
 
 -- Model / State
-type State = Cube
+type State = Array Cube
 
 -- Values
 
@@ -84,6 +87,8 @@ accelerateBy = oneDegInRad * 50.0
 
 dampenPercent :: Number
 dampenPercent = 1.0 - (0.9 / frameRate) -- 10% per second
+
+
 
 initCube :: Cube
 initCube =
@@ -119,14 +124,23 @@ initCube =
       , za: tenDegInRad
       }
   , forward: true
+  , velocity: 1.0
+  , idl: 0
+  
   }
 
 data Query a = Tick a | Other a
 
 -- Events
 data Action
-  = DecAngVelocity Axis
-  | IncAngVelocity Axis
+  = --DecAngVelocity Axis
+    IncAngVelocity Axis
+  | Reverse Int
+  | IncVel Int
+  | DecVel Int
+  | Add
+  | Remove
+
 
 
 cubes :: forall query input output m. H.Component Query input output m
@@ -142,39 +156,82 @@ cubes =
         }
     where
         initialState :: State
-        initialState = initCube
+        initialState =  [ initCube ]
 
         render :: forall m. State -> H.ComponentHTML Action () m
-        render = renderView
+        render state = HH.div[] [HH.ul[]$map renderView state]
 
-        runFunction :: _ -> H.HalogenM State Action () output m Unit
+        runFunction :: (State -> State) -> H.HalogenM State Action () output m Unit
         runFunction fn = do
           _ <- H.modify fn
           pure unit
 
         handleAction :: Action -> H.HalogenM State Action () output m Unit
         handleAction query = case query of
-            DecAngVelocity axis -> H.modify_ \state -> state
-            IncAngVelocity axis -> runFunction  (\c -> incAngVelocity axis c)
+            --DecAngVelocity axis -> H.modify_ (\state -> map (decAngVelocity axis) state)
+            IncAngVelocity axis -> H.modify_ (\state -> map (incAngVelocity axis) state)
+            Reverse cubeId -> H.modify_ (\state -> map (\c -> if c.idl == cubeId then reverse c else c) state)
+                            --H.modify_ (\state -> map reverse state)
+            IncVel cubeId -> H.modify_ (\state -> map (\c -> if c.idl == cubeId then accAngVelocity c else c) state)
+            DecVel cubeId -> H.modify_ (\state -> map (\c -> if c.idl == cubeId then dccAngVelocity c else c) state)
+            Add -> H.modify_ (\state -> 
+              let
+                newId = length state
+                newCube = initCube { idl = newId }
+              in
+                snoc state newCube)
+            Remove -> H.modify_ (\state -> rem state)
+
+
+        
+            
 
         handleQuery :: forall m a message. Query a -> H.HalogenM State Action () message m (Maybe a)
         handleQuery = case _ of
           Tick a -> do
-            _ <- H.modify (\c -> tick c)
+            _ <- H.modify (\cs -> map tick cs)
             pure (Just a)
           Other a -> 
             pure (Just a)
 
-     
+reverse :: Cube -> Cube
+reverse c = c {forward = not c.forward }
+
+
 incAngVelocity :: Axis -> Cube -> Cube
 incAngVelocity axis c = do 
   let {xa, ya, za} = c.angVel
-  case axis of
-    X -> c { angVel { xa = xa + accelerateBy } }
-    Y -> c { angVel { ya = ya + accelerateBy } }
-    Z -> c { angVel { za = za + accelerateBy } }
+  if (c.forward)
+    then do
+      case axis of
+        X -> c { angVel { xa = xa + accelerateBy*c.velocity } }
+        Y -> c { angVel { ya = ya + accelerateBy*c.velocity } }
+        Z -> c { angVel { za = za + accelerateBy*c.velocity } }
+  else 
+    case axis of
+      X -> c { angVel { xa = xa - (accelerateBy*c.velocity) } }
+      Y -> c { angVel { ya = ya - (accelerateBy*c.velocity) } }
+      Z -> c { angVel { za = za - (accelerateBy*c.velocity) } } 
 
 
+
+accAngVelocity :: Cube -> Cube
+accAngVelocity c = do 
+  c { velocity = c.velocity * 1.2}
+
+dccAngVelocity :: Cube -> Cube
+dccAngVelocity c = do 
+  c { velocity = c.velocity/ 1.2}
+
+
+addcube :: State -> State
+addcube cs = do
+  let newCube = initCube
+  snoc cs newCube
+
+
+rem :: forall a. Array a -> Array a
+rem n = slice 0 (length n - 1) n
 
 tick :: Cube -> Cube
 tick c =  do
@@ -202,6 +259,8 @@ rotate { xa, ya, za } = rotateX xa >>> rotateY ya >>> rotateZ za
     rotateY ang {x,y,z} = let Tuple nx nz = rotateInPlane x z ang in { x:nx, y, z:nz }
     rotateZ ang {x,y,z} = let Tuple nx ny = rotateInPlane x y ang in { x:nx, y:ny, z }
 
+-- use map functions to map the rotate functions onto the State i.e. array of Cubes so that they are global??
+
     rotateInPlane :: Number -> Number -> Number -> Tuple Number Number
     rotateInPlane axis1 axis2 ang =
       Tuple (axis1 * cos(ang) - axis2 * sin(ang)) (axis2 * cos(ang) + axis1 * sin(ang))
@@ -224,9 +283,14 @@ dampenAngVelocity {xa, ya, za} =
     dampen ang = ang * dampenPercent -- Basics.max 0 (ang-drpf)
 
 
+
+
 ---------------------------------------------------------------------------------------
 
 renderView :: forall m. Cube -> H.ComponentHTML Action () m
+--renderView :: RotatingShape -> H.ComponentHTML Action () m 
+
+
 renderView state = let
         {vertices, edges} = state.shape
         vert2Ds = map project vertices
@@ -235,6 +299,11 @@ renderView state = let
         [ renderButton "rotX++" (IncAngVelocity X)
         , renderButton "rotY++" (IncAngVelocity Y)
         , renderButton "rotZ++" (IncAngVelocity Z)
+        ,renderButton "Reverse" (Reverse state.idl)
+        ,renderButton "Vel++" (IncVel state.idl)
+        ,renderButton "Vel--" (DecVel state.idl)
+        ,renderButton "Add" (Add) 
+        ,renderButton "Remove" (Remove)
         ]
         <>
         [ SE.svg
