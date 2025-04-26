@@ -1,0 +1,6 @@
+[submodule "solutions/Abhijeet1"]
+	path = solutions/Abhijeet1
+	url = https://bitbucket.org/juspay/cube-rotation/src/latest-version/solutions/
+[submodule "solutions/Abhijeet_Verma"]
+	path = solutions/Abhijeet_Verma
+	url = https://bitbucket.org/juspay/cube-rotation/src/latest-version/solutions/
