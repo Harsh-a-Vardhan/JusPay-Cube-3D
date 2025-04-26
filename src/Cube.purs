@@ -5,6 +5,7 @@ import Prelude
 import Data.Tuple
 import Data.Array (mapWithIndex, (!!))
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Array (Length)
 
 import Halogen as H
 import Halogen.HTML as HH
