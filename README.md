@@ -5,9 +5,9 @@
 
 [SolutionApproach.pdf](https://github.com/user-attachments/files/19922964/Cube.Rotation.-.Harsha.pdf)
 
-Final Solution: Replace the cube file with the cube-solution file to add the functions.
+Final Solution: Replace the cube file from the main branch with the cube file of the solution branch to add the new cube-specific functions.
 
-(Download the entire folder and open the index file in the dist folder to see the cube working in the solution branch)
+(Download the entire folder and open the index file in the dist folder to see the cube working with complete functionality from the solution branch)
 
 This is the project I did as part of my coding interview at Juspay. I created and modified functions to rotate a cube in 3d space using Purescript 
 
